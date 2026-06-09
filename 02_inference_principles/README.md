@@ -12,7 +12,7 @@
 ## 运行
 
 ```pwsh
-python benchmark_throughput_vs_latency.py   # 打印权衡表，并生成 tradeoff.png
+uv run 02_inference_principles\benchmark_throughput_vs_latency.py   # 打印权衡表，并生成 tradeoff.png
 ```
 
 ## Definition of Done

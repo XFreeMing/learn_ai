@@ -16,9 +16,13 @@ import torch.nn as nn
 
 
 class TinyBlock(nn.Module):
-    """模拟一层推理计算的小模型（线性 + 注意力近似）。"""
+    """模拟一层推理计算的小模型（线性 + 注意力近似）。
 
-    def __init__(self, dim=512, depth=4):
+    dim/depth 取得足够大，使大 batch 能进入 compute-bound 区间，
+    从而复现经典的"per-request latency 先降后升"U 形曲线。
+    """
+
+    def __init__(self, dim=2048, depth=8):
         super().__init__()
         self.layers = nn.Sequential(
             *[nn.Sequential(nn.Linear(dim, dim), nn.GELU()) for _ in range(depth)]
@@ -29,7 +33,7 @@ class TinyBlock(nn.Module):
         return self.layers(x)
 
 
-def benchmark(model, batch_sizes, dim=512, repeats=20, warmup=3):
+def benchmark(model, batch_sizes, dim=2048, repeats=10, warmup=2):
     results = []
     for bs in batch_sizes:
         x = torch.randn(bs, dim)
@@ -42,10 +46,11 @@ def benchmark(model, batch_sizes, dim=512, repeats=20, warmup=3):
             model(x)
         elapsed = time.perf_counter() - t0
 
-        per_batch = elapsed / repeats          # 一个 batch 的耗时
-        per_request = per_batch / bs           # 单请求延迟
+        per_batch = elapsed / repeats          # 一个 batch 的墙钟耗时
+        # 一个请求实际要等"整个 batch 跑完"，所以它感受到的延迟 = 整批耗时
+        batch_latency_ms = per_batch * 1000
         throughput = (bs * repeats) / elapsed  # req/s
-        results.append((bs, per_request * 1000, throughput))
+        results.append((bs, batch_latency_ms, throughput))
     return results
 
 
@@ -57,13 +62,13 @@ def main():
     batch_sizes = [1, 2, 4, 8, 16, 32, 64, 128]
     results = benchmark(model, batch_sizes)
 
-    print(f"{'batch':>6} | {'per-req latency (ms)':>22} | {'throughput (req/s)':>20}")
-    print("-" * 56)
+    print(f"{'batch':>6} | {'batch latency (ms)':>20} | {'throughput (req/s)':>20}")
+    print("-" * 54)
     for bs, lat_ms, thr in results:
-        print(f"{bs:>6} | {lat_ms:>22.3f} | {thr:>20.1f}")
+        print(f"{bs:>6} | {lat_ms:>20.3f} | {thr:>20.1f}")
 
-    # 找甜点：吞吐增益明显放缓的拐点
-    print("\n观察：随 batch 增大，throughput 上升但 per-request latency 也上升。")
+    print("\n观察：随 batch 增大，throughput 上升，但一个请求要等整批跑完，")
+    print("它感受到的延迟 (batch latency) 也随之上升。")
     print("甜点 = 在可接受延迟内吞吐最高的那个 batch size。")
 
     # 可选画图
@@ -75,7 +80,7 @@ def main():
         thrs = [r[2] for r in results]
         fig, ax1 = plt.subplots(figsize=(7, 4))
         ax1.set_xlabel("batch size")
-        ax1.set_ylabel("per-request latency (ms)", color="tab:red")
+        ax1.set_ylabel("batch latency (ms)", color="tab:red")
         ax1.plot(bss, lats, "o-", color="tab:red", label="latency")
         ax1.set_xscale("log", base=2)
         ax2 = ax1.twinx()

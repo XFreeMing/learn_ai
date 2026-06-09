@@ -13,9 +13,9 @@
 ## 运行
 
 ```pwsh
-python 01_linear_y_wx_b.py     # 看到 "gradient check passed" 即正确
-python 02_mlp_numpy.py         # 看到 loss 持续下降
-python 03_mlp_pytorch.py       # 看到 accuracy 上升
+uv run 01_handwritten_nn\01_linear_y_wx_b.py   # 看到 "gradient check passed" 即正确
+uv run 01_handwritten_nn\02_mlp_numpy.py       # 看到 loss 持续下降
+uv run 01_handwritten_nn\03_mlp_pytorch.py     # 看到 accuracy 上升
 ```
 
 ## Definition of Done

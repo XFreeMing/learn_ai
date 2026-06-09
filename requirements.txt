@@ -1,3 +1,6 @@
+# 依赖现由 uv 管理（见 pyproject.toml / uv.lock）。
+# 本文件仅作非 uv 用户的参考，运行 `uv sync` 即可安装下列全部依赖。
+
 # M1 + M2 基础依赖（CPU 即可）
 numpy>=1.24
 torch>=2.0

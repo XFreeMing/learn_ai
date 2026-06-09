@@ -15,22 +15,22 @@
 
 ## 快速开始
 
+本项目使用 [uv](https://docs.astral.sh/uv/) 管理环境与依赖。
+
 ```pwsh
-# 1. 创建虚拟环境
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# 1. 安装依赖（已生成 pyproject.toml / uv.lock，CPU 即可跑 M1+M2）
+uv sync
 
-# 2. 安装基础依赖（M1 + M2 在 CPU 即可跑）
-pip install -r requirements.txt
-
-# 3. 按顺序动手
-python 01_handwritten_nn\01_linear_y_wx_b.py
-python 01_handwritten_nn\02_mlp_numpy.py
-python 01_handwritten_nn\03_mlp_pytorch.py
-python 02_inference_principles\benchmark_throughput_vs_latency.py
-python 03_inference_engines\baseline_transformers.py
+# 2. 按顺序动手（uv run 自动激活环境）
+uv run 01_handwritten_nn\01_linear_y_wx_b.py
+uv run 01_handwritten_nn\02_mlp_numpy.py
+uv run 01_handwritten_nn\03_mlp_pytorch.py
+uv run 02_inference_principles\benchmark_throughput_vs_latency.py
+uv run 03_inference_engines\baseline_transformers.py
 # vLLM 需 Linux/WSL + GPU，见 03_inference_engines/README.md
 ```
+
+> 新增依赖用 `uv add <包名>`；vLLM 仅在 Linux/WSL+GPU 环境单独 `uv add vllm`。
 
 ## 周末冲刺
 
