@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>rng.normal 可视化 · 矩阵 ⇄ 直方图</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --panel: #181b24;
+            --panel-2: #1f2430;
+            --line: #2a3040;
+            --text: #e6e9ef;
+            --muted: #9aa3b2;
+            --accent: #4f9cff;
+            --pos: #ff6b6b;
+            --neg: #4f9cff;
+            --hi: #ffd34e;
+            --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(1200px 800px at 70% -10%, #1a2030, var(--bg));
+            color: var(--text);
+            font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+            line-height: 1.6;
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin: 0 0 4px;
+        }
+
+        h2 {
+            font-size: 15px;
+            color: var(--accent);
+            margin: 0 0 10px;
+            letter-spacing: .3px;
+        }
+
+        .sub {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        code,
+        .mono {
+            font-family: var(--mono);
+        }
+
+        .formula {
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 14px;
+            display: inline-block;
+            font-family: var(--mono);
+            color: #cfe3ff;
+            font-size: 14px;
+            margin-bottom: 18px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .ctrl {
+            margin-bottom: 16px;
+        }
+
+        .ctrl label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .ctrl label b {
+            color: var(--text);
+            font-family: var(--mono);
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        .row2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 14px;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .stats div {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed var(--line);
+            padding: 3px 0;
+        }
+
+        .stats span {
+            font-family: var(--mono);
+            color: var(--hi);
+        }
+
+        .viz {
+            display: grid;
+            grid-template-columns: minmax(260px, 0.9fr) 1.3fr;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .card-title {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .card-title b {
+            color: var(--text);
+        }
+
+        /* matrix */
+        .matrix-wrap {
+            overflow: auto;
+            max-height: 460px;
+        }
+
+        table.matrix {
+            border-collapse: collapse;
+            margin: 0 auto;
+        }
+
+        table.matrix td.cell {
+            width: 46px;
+            height: 34px;
+            text-align: center;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: #0d0f14;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color .1s, transform .1s;
+            position: relative;
+        }
+
+        table.matrix td.cell.hi {
+            border-color: var(--hi);
+            transform: scale(1.06);
+            z-index: 2;
+        }
+
+        table.matrix td.cell.dim {
+            opacity: .25;
+        }
+
+        table.matrix td.idx {
+            color: var(--muted);
+            font-family: var(--mono);
+            font-size: 10px;
+            padding: 2px 6px;
+        }
+
+        .row-label {
+            color: var(--muted);
+            font-family: var(--mono);
+            font-size: 10px;
+            padding-right: 6px;
+            text-align: right;
+        }
+
+        /* histogram svg */
+        svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .bar {
+            cursor: pointer;
+            transition: opacity .1s;
+        }
+
+        .bar:hover {
+            opacity: .85;
+        }
+
+        .bar.hi {
+            stroke: var(--hi);
+            stroke-width: 2;
+        }
+
+        .bar.dim {
+            opacity: .25;
+        }
+
+        .axis text {
+            fill: var(--muted);
+            font-size: 10px;
+            font-family: var(--mono);
+        }
+
+        .axis line,
+        .axis path {
+            stroke: var(--line);
+        }
+
+        .pdf {
+            fill: none;
+            stroke: #7CFFb2;
+            stroke-width: 2;
+            stroke-dasharray: 5 4;
+        }
+
+        .axis-label {
+            fill: var(--text);
+            font-size: 12px;
+        }
+
+        .explain {
+            margin-top: 18px;
+            font-size: 13.5px;
+            color: #c9d2e0;
+        }
+
+        .explain b {
+            color: var(--hi);
+        }
+
+        .pill {
+            display: inline-block;
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 1px 7px;
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        .flow {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0 2px;
+        }
+
+        .flow .box {
+            background: var(--panel-2);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        .flow .arrow {
+            color: var(--accent);
+            font-size: 20px;
+        }
+
+        #tooltip {
+            position: fixed;
+            pointer-events: none;
+            background: #000a;
+            border: 1px solid var(--hi);
+            border-radius: 6px;
+            padding: 6px 9px;
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--hi);
+            opacity: 0;
+            transition: opacity .08s;
+            z-index: 50;
+            white-space: pre;
+        }
+
+        @media (max-width: 1000px) {
+
+            .layout,
+            .viz {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>rng.normal(loc, scale, size) 可视化 · 矩阵 ⇄ 直方图</h1>
+    <div class="sub">对应代码：<code>self.W = rng.normal(0, 0.1, size=(in_features, out_features))</code> ——
+        输出是一个<b>矩阵</b>，直方图是把矩阵里所有数字「按大小分桶计数」画出来的。</div>
+    <div class="formula">W[i,j] ~ Normal(μ=loc, σ=scale)，共 rows×cols 个独立采样</div>
+
+    <div class="layout">
+        <!-- 控制面板 -->
+        <div class="panel">
+            <h2>① 调参数</h2>
+            <div class="ctrl">
+                <label>loc 均值 μ（中心位置）<b id="locV">0.00</b></label>
+                <input id="loc" type="range" min="-3" max="3" step="0.1" value="0" />
+            </div>
+            <div class="ctrl">
+                <label>scale 标准差 σ（分散度）<b id="scaleV">0.10</b></label>
+                <input id="scale" type="range" min="0.05" max="2" step="0.05" value="0.1" />
+            </div>
+            <div class="row2">
+                <div class="ctrl">
+                    <label>rows<b id="rowsV">8</b></label>
+                    <input id="rows" type="range" min="1" max="30" step="1" value="8" />
+                </div>
+                <div class="ctrl">
+                    <label>cols<b id="colsV">8</b></label>
+                    <input id="cols" type="range" min="1" max="30" step="1" value="8" />
+                </div>
+            </div>
+            <div class="ctrl">
+                <label>bins 直方图桶数<b id="binsV">15</b></label>
+                <input id="bins" type="range" min="5" max="40" step="1" value="15" />
+            </div>
+            <div class="ctrl">
+                <label>seed 随机种子<b id="seedV">0</b></label>
+                <input id="seed" type="range" min="0" max="50" step="1" value="0" />
+            </div>
+            <div class="ctrl">
+                <label>配色模式（决定颜色由谁控制）</label>
+                <select id="colorMode"
+                    style="width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px">
+                    <option value="relative">相对(z分数)：颜色只看「偏均值几个σ」，改 loc/scale 不变，只受 seed 影响</option>
+                    <option value="absolute">绝对(固定数轴 ±2)：颜色直接看数值大小，改 loc/scale 颜色会跟着变</option>
+                </select>
+            </div>
+            <button id="regen">🎲 重新采样（换一批随机数）</button>
+
+            <h2 style="margin-top:20px">② 实际统计量</h2>
+            <div class="stats">
+                <div>元素总数 N<span id="sN">–</span></div>
+                <div>实测均值<span id="sMean">–</span></div>
+                <div>实测标准差<span id="sStd">–</span></div>
+                <div>最小值<span id="sMin">–</span></div>
+                <div>最大值<span id="sMax">–</span></div>
+                <div>桶宽<span id="sBw">–</span></div>
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:10px">
+                元素越多(N↑)、实测均值/标准差越接近设定的 <span class="pill">loc</span> / <span class="pill">scale</span>。
+            </div>
+        </div>
+
+        <!-- 可视化区 -->
+        <div class="panel">
+            <h2>③ 矩阵 与 直方图（鼠标悬停看转换关系）</h2>
+            <div class="viz">
+                <div>
+                    <div class="card-title">输出矩阵 <b id="shapeLbl">W (8×8)</b><br>
+                        <span style="font-size:11px">颜色：<span style="color:var(--neg)">蓝=偏小</span> · 白=接近均值 · <span
+                                style="color:var(--pos)">红=偏大</span>。悬停某格→高亮它所在的桶。</span>
+                    </div>
+                    <div class="matrix-wrap">
+                        <div id="matrix"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="card-title">直方图 <b>横轴=采样值大小，纵轴=落在该区间的元素个数</b><br>
+                        <span style="font-size:11px">绿色虚线=理论正态曲线（期望频数）。悬停某柱→高亮矩阵里属于这个桶的所有格子。</span>
+                    </div>
+                    <svg id="hist" viewBox="0 0 560 400" preserveAspectRatio="xMidYMid meet"></svg>
+                </div>
+            </div>
+
+            <div class="explain">
+                <h2 style="margin-top:6px">④ 矩阵 → 直方图 是怎么转换的？</h2>
+                <div class="flow">
+                    <div class="box">第 1 步：拿到矩阵<br>共 N 个数字</div>
+                    <div class="arrow">→</div>
+                    <div class="box">第 2 步：把数轴切成 <span class="pill" id="flowBins">15</span> 个等宽区间(桶)</div>
+                    <div class="arrow">→</div>
+                    <div class="box">第 3 步：数每个区间里<br>掉进了几个数字</div>
+                    <div class="arrow">→</div>
+                    <div class="box">第 4 步：区间的计数<br>= 柱子的高度</div>
+                </div>
+                <p style="margin:8px 0 0">
+                    所以直方图 <b>不是</b> 矩阵本身，而是矩阵里全部 <span class="pill">N</span> 个数字的「分布统计」。
+                    一个矩阵格子（一个采样值）只会落进 <b>一个</b> 桶里 —— 这就是悬停时高亮的那一对对应关系。
+                    改大 <span class="pill">scale</span>，数字散得更开，柱子摊平变宽；改 <span class="pill">loc</span>，整堆柱子左右平移。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script>
+        // ---------- 可复现随机数 (mulberry32) ----------
+        function mulberry32(a) {
+            return function () {
+                a |= 0; a = (a + 0x6D2B79F5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        // Box-Muller: 把均匀分布变成标准正态分布
+        function gaussian(rand) {
+            let u = 0, v = 0;
+            while (u === 0) u = rand();
+            while (v === 0) v = rand();
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+        function normPdf(x, mu, sig) {
+            return Math.exp(-((x - mu) ** 2) / (2 * sig * sig)) / (sig * Math.sqrt(2 * Math.PI));
+        }
+
+        const $ = (id) => document.getElementById(id);
+        const ctrls = ["loc", "scale", "rows", "cols", "bins", "seed"];
+        const tooltip = $("tooltip");
+
+        let state = {}; // { values: [{r,c,v,bin}], bins:[{lo,hi,count,cells:[]}] ... }
+
+        function fmt(x, d = 3) { return (x >= 0 ? " " : "") + x.toFixed(d); }
+
+        const ABS_RANGE = 2; // 绝对配色的固定数轴半径：[-2, +2] 映射到 蓝→白→红
+
+        // 颜色：蓝(小)→白→红(大)。两种模式决定「t 由谁算」
+        //  relative: t = (v-loc)/(3σ) —— loc/scale 会被约掉，只剩 z 分数(seed决定)
+        //  absolute: t = v/ABS_RANGE —— 直接按数值大小，固定数轴，改 loc/scale 颜色会变
+        function cellColor(v, loc, scale, mode) {
+            let t;
+            if (mode === "absolute") {
+                t = Math.max(-1, Math.min(1, v / ABS_RANGE));
+            } else {
+                t = Math.max(-1, Math.min(1, (v - loc) / (3 * scale)));
+            }
+            if (t < 0) { // 蓝
+                const k = -t; return `rgb(${Math.round(255 - k * 175)},${Math.round(255 - k * 100)},255)`;
+            } else { // 红
+                const k = t; return `rgb(255,${Math.round(255 - k * 120)},${Math.round(255 - k * 120)})`;
+            }
+        }
+
+        function compute() {
+            const loc = +$("loc").value, scale = +$("scale").value;
+            const rows = +$("rows").value, cols = +$("cols").value;
+            const nbins = +$("bins").value, seed = +$("seed").value;
+            const colorMode = $("colorMode").value;
+
+            const rand = mulberry32(seed * 2654435761 >>> 0);
+            const values = [];
+            let min = Infinity, max = -Infinity, sum = 0, sum2 = 0;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const v = loc + scale * gaussian(rand);
+                    values.push({ r, c, v, bin: -1 });
+                    min = Math.min(min, v); max = Math.max(max, v);
+                    sum += v; sum2 += v * v;
+                }
+            }
+            const N = values.length;
+            const mean = sum / N;
+            const std = Math.sqrt(Math.max(0, sum2 / N - mean * mean));
+
+            // 用对称范围作为直方图轴，便于和理论曲线对齐
+            const span = Math.max(max - loc, loc - min, 3 * scale);
+            const lo = loc - span * 1.05, hi = loc + span * 1.05;
+            const bw = (hi - lo) / nbins;
+            const bins = [];
+            for (let b = 0; b < nbins; b++) bins.push({ lo: lo + b * bw, hi: lo + (b + 1) * bw, count: 0, cells: [] });
+            for (const item of values) {
+                let bi = Math.floor((item.v - lo) / bw);
+                bi = Math.max(0, Math.min(nbins - 1, bi));
+                item.bin = bi;
+                bins[bi].count++;
+                bins[bi].cells.push(item);
+            }
+            state = { loc, scale, rows, cols, nbins, colorMode, N, mean, std, min, max, lo, hi, bw, values, bins };
+        }
+
+        function renderStats() {
+            $("sN").textContent = state.N;
+            $("sMean").textContent = fmt(state.mean);
+            $("sStd").textContent = fmt(state.std);
+            $("sMin").textContent = fmt(state.min);
+            $("sMax").textContent = fmt(state.max);
+            $("sBw").textContent = fmt(state.bw);
+            $("shapeLbl").textContent = `W (${state.rows}×${state.cols})`;
+            $("flowBins").textContent = state.nbins;
+        }
+
+        function renderMatrix() {
+            const { values, rows, cols, loc, scale, colorMode } = state;
+            let html = '<table class="matrix"><tr><td class="idx"></td>';
+            for (let c = 0; c < cols; c++) html += `<td class="idx">j=${c}</td>`;
+            html += "</tr>";
+            let k = 0;
+            for (let r = 0; r < rows; r++) {
+                html += `<tr><td class="row-label">i=${r}</td>`;
+                for (let c = 0; c < cols; c++) {
+                    const it = values[k++];
+                    const bg = cellColor(it.v, loc, scale, colorMode);
+                    html += `<td class="cell" data-bin="${it.bin}" data-i="${it.r}" data-j="${it.c}" data-v="${it.v.toFixed(4)}" style="background:${bg}">${it.v.toFixed(2)}</td>`;
+                }
+                html += "</tr>";
+            }
+            html += "</table>";
+            $("matrix").innerHTML = html;
+
+            $("matrix").querySelectorAll("td.cell").forEach((td) => {
+                td.addEventListener("mouseenter", (e) => {
+                    const bin = +td.dataset.bin;
+                    highlightBin(bin);
+                    const b = state.bins[bin];
+                    showTip(e, `W[${td.dataset.i},${td.dataset.j}] = ${(+td.dataset.v).toFixed(4)}\n落入桶 #${bin}: [${b.lo.toFixed(2)}, ${b.hi.toFixed(2)})\n该桶共有 ${b.count} 个元素`);
+                });
+                td.addEventListener("mousemove", moveTip);
+                td.addEventListener("mouseleave", clearHighlight);
+            });
+        }
+
+        const HW = 560, HH = 400, M = { l: 48, r: 14, t: 16, b: 54 };
+        function renderHist() {
+            const { bins, lo, hi, bw, N, loc, scale, nbins } = state;
+            const maxCount = Math.max(1, ...bins.map((b) => b.count));
+            const plotW = HW - M.l - M.r, plotH = HH - M.t - M.b;
+            const x = (v) => M.l + ((v - lo) / (hi - lo)) * plotW;
+            const y = (cnt) => M.t + plotH - (cnt / maxCount) * plotH;
+
+            let svg = "";
+            // y 轴网格 + 刻度（频数）
+            const yticks = 5;
+            svg += '<g class="axis">';
+            for (let t = 0; t <= yticks; t++) {
+                const cnt = (maxCount / yticks) * t;
+                const yy = y(cnt);
+                svg += `<line x1="${M.l}" y1="${yy}" x2="${HW - M.r}" y2="${yy}" stroke="#222a38"/>`;
+                svg += `<text x="${M.l - 6}" y="${yy + 3}" text-anchor="end">${Math.round(cnt)}</text>`;
+            }
+            svg += "</g>";
+
+            // 柱子
+            for (let b = 0; b < bins.length; b++) {
+                const bin = bins[b];
+                const bx = x(bin.lo) + 1, bw2 = x(bin.hi) - x(bin.lo) - 2;
+                const by = y(bin.count), bh = y(0) - y(bin.count);
+                const hue = 210; // 蓝
+                svg += `<rect class="bar" data-bin="${b}" x="${bx}" y="${by}" width="${Math.max(0, bw2)}" height="${Math.max(0, bh)}" fill="hsl(${hue} 80% 60% / .8)" rx="2"/>`;
+            }
+
+            // x 轴刻度（采样值）
+            svg += '<g class="axis">';
+            svg += `<line x1="${M.l}" y1="${y(0)}" x2="${HW - M.r}" y2="${y(0)}"/>`;
+            const xticks = 6;
+            for (let t = 0; t <= xticks; t++) {
+                const val = lo + ((hi - lo) / xticks) * t;
+                const xx = x(val);
+                svg += `<line x1="${xx}" y1="${y(0)}" x2="${xx}" y2="${y(0) + 5}"/>`;
+                svg += `<text x="${xx}" y="${y(0) + 18}" text-anchor="middle">${val.toFixed(2)}</text>`;
+            }
+            svg += "</g>";
+
+            // 理论曲线：期望频数 = N * binWidth * pdf(x)
+            let path = "";
+            const steps = 120;
+            for (let s = 0; s <= steps; s++) {
+                const val = lo + ((hi - lo) / steps) * s;
+                const expected = N * bw * normPdf(val, loc, scale);
+                const px = x(val), py = y(expected);
+                path += (s === 0 ? "M" : "L") + px.toFixed(1) + " " + py.toFixed(1) + " ";
+            }
+            svg += `<path class="pdf" d="${path}"/>`;
+
+            // 轴标题
+            svg += `<text class="axis-label" x="${M.l + plotW / 2}" y="${HH - 8}" text-anchor="middle">采样值大小 (value)  —— μ=${loc.toFixed(2)}, σ=${scale.toFixed(2)}</text>`;
+            svg += `<text class="axis-label" transform="translate(14 ${M.t + plotH / 2}) rotate(-90)" text-anchor="middle">元素个数 (count)</text>`;
+            // 图例
+            svg += `<text x="${HW - M.r - 4}" y="${M.t + 6}" text-anchor="end" fill="#7CFFb2" font-size="11" font-family="monospace">┄ 理论正态曲线</text>`;
+
+            $("hist").innerHTML = svg;
+
+            $("hist").querySelectorAll("rect.bar").forEach((rect) => {
+                rect.addEventListener("mouseenter", (e) => {
+                    const b = +rect.dataset.bin;
+                    highlightBin(b);
+                    const bin = state.bins[b];
+                    showTip(e, `桶 #${b}: 区间 [${bin.lo.toFixed(2)}, ${bin.hi.toFixed(2)})\n落入 ${bin.count} 个元素 (柱高=${bin.count})\n占比 ${(100 * bin.count / state.N).toFixed(1)}%`);
+                });
+                rect.addEventListener("mousemove", moveTip);
+                rect.addEventListener("mouseleave", clearHighlight);
+            });
+        }
+
+        function highlightBin(bin) {
+            document.querySelectorAll("td.cell").forEach((td) => {
+                if (+td.dataset.bin === bin) { td.classList.add("hi"); td.classList.remove("dim"); }
+                else { td.classList.add("dim"); td.classList.remove("hi"); }
+            });
+            document.querySelectorAll("rect.bar").forEach((r) => {
+                if (+r.dataset.bin === bin) { r.classList.add("hi"); r.classList.remove("dim"); }
+                else { r.classList.add("dim"); r.classList.remove("hi"); }
+            });
+        }
+        function clearHighlight() {
+            document.querySelectorAll("td.cell").forEach((td) => td.classList.remove("hi", "dim"));
+            document.querySelectorAll("rect.bar").forEach((r) => r.classList.remove("hi", "dim"));
+            tooltip.style.opacity = 0;
+        }
+        function showTip(e, text) { tooltip.textContent = text; tooltip.style.opacity = 1; moveTip(e); }
+        function moveTip(e) {
+            tooltip.style.left = (e.clientX + 14) + "px";
+            tooltip.style.top = (e.clientY + 14) + "px";
+        }
+
+        function renderAll() {
+            compute();
+            renderStats();
+            renderMatrix();
+            renderHist();
+        }
+
+        ctrls.forEach((id) => {
+            $(id).addEventListener("input", () => {
+                $(id + "V").textContent = id === "loc" ? (+$(id).value).toFixed(2)
+                    : id === "scale" ? (+$(id).value).toFixed(2)
+                        : $(id).value;
+                renderAll();
+            });
+        });
+        $("regen").addEventListener("click", () => {
+            const s = (+$("seed").value + 1) % 51;
+            $("seed").value = s; $("seedV").textContent = s; renderAll();
+        });
+        $("colorMode").addEventListener("change", renderAll);
+
+        renderAll();
+    </script>
+</body>
+
+</html>
